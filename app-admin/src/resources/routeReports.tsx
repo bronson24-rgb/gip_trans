@@ -14,9 +14,7 @@ import {
   useRecordContext,
 } from "react-admin";
 import { Button } from "@mui/material";
-import { getSessionToken, refreshAccessToken } from "../authProvider";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+import { authenticatedFetch } from "../apiClient";
 
 const STATUS_CHOICES = [
   { id: "draft", name: "Чернетка" },
@@ -33,16 +31,7 @@ function ReceiptButton() {
   if (!refill?.receipt_photo_key) return <span>—</span>;
 
   const handleClick = async () => {
-    const authHeader = (): Record<string, string> => {
-      const token = getSessionToken();
-      return token ? { Authorization: `Bearer ${token}` } : {};
-    };
-    const url = `${API_BASE_URL}/api/uploads/receipt/${refill.receipt_photo_key}`;
-
-    let response = await fetch(url, { headers: authHeader() });
-    if (response.status === 401 && (await refreshAccessToken())) {
-      response = await fetch(url, { headers: authHeader() });
-    }
+    const response = await authenticatedFetch(`/api/uploads/receipt/${refill.receipt_photo_key}`);
     if (!response.ok) return;
     window.open(response.url, "_blank", "noopener,noreferrer");
   };

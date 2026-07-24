@@ -1,4 +1,5 @@
 export interface FuelRefillInput {
+  id: string; // стабильный локальный id (не уходит на backend) — React key и ключ photoStatus, вместо позиции в массиве
   refillDatetime: string; // ISO datetime-local value
   stationName: string;
   liters: string;

@@ -1,34 +1,14 @@
 import type { DataProvider } from "react-admin";
-import { getSessionToken, refreshAccessToken } from "./authProvider";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
-
-async function rawFetch(path: string, options: RequestInit): Promise<Response> {
-  const token = getSessionToken();
-  return fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  });
-}
+import { authenticatedFetch } from "./apiClient";
 
 // Backend не поддерживает пагинацию/сортировку на сервере (см. app-backend/app/api/*.py —
 // GET-эндпоинты всегда отдают полный список). Для MVP-объёмов (десятки-сотни записей)
 // этого достаточно: применяем пагинацию/сортировку на клиенте.
 async function apiFetch(path: string, options: RequestInit = {}) {
-  let response = await rawFetch(path, options);
-
-  if (response.status === 401) {
-    // Access-токен прострочений — пробуємо оновити й повторити запит один раз.
-    // Якщо refresh теж поверне 401 — authProvider.checkError підхопить це і зробить logout.
-    const refreshed = await refreshAccessToken();
-    if (refreshed) {
-      response = await rawFetch(path, options);
-    }
-  }
+  const response = await authenticatedFetch(path, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...options.headers },
+  });
 
   if (!response.ok) {
     const body = await response.json().catch(() => null);

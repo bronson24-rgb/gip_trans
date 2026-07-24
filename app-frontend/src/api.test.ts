@@ -44,6 +44,7 @@ describe("toPayload", () => {
       baseInput({
         fuelRefills: [
           {
+            id: "refill-1",
             refillDatetime: "2026-07-24T08:30",
             stationName: "  Лукойл  ",
             liters: "50",
@@ -64,6 +65,7 @@ describe("toPayload", () => {
       baseInput({
         fuelRefills: [
           {
+            id: "refill-2",
             refillDatetime: "2026-07-24T08:30",
             stationName: "АЗС",
             liters: "10",

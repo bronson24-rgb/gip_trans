@@ -1,11 +1,19 @@
 import { useEffect, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { ApiError, createRouteReport, fetchActiveVehicles, uploadReceiptPhoto } from "./api";
+import { clearDraft, loadDraft, saveDraft } from "./draft";
 import type { FuelRefillInput, RouteReportInput, Vehicle } from "./types";
 
 type PhotoUploadStatus = "idle" | "uploading" | "uploaded" | "error";
 
+function generateLocalId(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 const emptyRefill = (): FuelRefillInput => ({
+  id: generateLocalId(),
   refillDatetime: "",
   stationName: "",
   liters: "",
@@ -26,15 +34,48 @@ const emptyReport = (): RouteReportInput => ({
   fuelRefills: [],
 });
 
+// Черновик, только что загруженный со старта, ещё непусто заполнен, но не
+// содержит фото в статусе "uploading" (файлы не переживают localStorage) —
+// такие статусы при восстановлении выводятся как "uploaded", если ключ уже
+// есть, иначе просто не отображаются.
+function photoStatusFromDraft(draft: RouteReportInput): Record<string, PhotoUploadStatus> {
+  const status: Record<string, PhotoUploadStatus> = {};
+  for (const refill of draft.fuelRefills) {
+    if (refill.receiptPhotoKey) status[refill.id] = "uploaded";
+  }
+  return status;
+}
+
+function isReportEmpty(report: RouteReportInput): boolean {
+  return (
+    !report.vehicleId &&
+    !report.routeFrom &&
+    !report.routeTo &&
+    !report.odometerStart &&
+    !report.odometerEnd &&
+    !report.fuelEnd &&
+    !report.departureTime &&
+    !report.arrivalTime &&
+    !report.comment &&
+    report.fuelRefills.length === 0
+  );
+}
+
 type Status = "idle" | "submitting" | "success" | "error";
 
 export function DriverReportForm() {
   const [report, setReport] = useState<RouteReportInput>(emptyReport);
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [photoStatus, setPhotoStatus] = useState<Record<number, PhotoUploadStatus>>({});
+  const [photoStatus, setPhotoStatus] = useState<Record<string, PhotoUploadStatus>>({});
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [vehiclesError, setVehiclesError] = useState<string | null>(null);
+
+  // Черновик, ожидающий решения пользователя (відновити/почати заново) —
+  // поки не вирішено, поточну (порожню) форму в localStorage не пишемо, щоб
+  // не затерти ще не переглянутий чернетку.
+  const [pendingDraft, setPendingDraft] = useState<RouteReportInput | null>(null);
+  const [draftResolved, setDraftResolved] = useState(false);
 
   useEffect(() => {
     fetchActiveVehicles()
@@ -42,14 +83,47 @@ export function DriverReportForm() {
       .catch(() => setVehiclesError("Не вдалося завантажити список автомобілів"));
   }, []);
 
+  useEffect(() => {
+    const draft = loadDraft();
+    if (draft && !isReportEmpty(draft)) {
+      setPendingDraft(draft);
+    } else {
+      setDraftResolved(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!draftResolved) return; // ждём решения по найденному черновику
+    if (isReportEmpty(report)) {
+      clearDraft();
+    } else {
+      saveDraft(report);
+    }
+  }, [report, draftResolved]);
+
+  const handleRestoreDraft = () => {
+    if (pendingDraft) {
+      setReport(pendingDraft);
+      setPhotoStatus(photoStatusFromDraft(pendingDraft));
+    }
+    setPendingDraft(null);
+    setDraftResolved(true);
+  };
+
+  const handleDiscardDraft = () => {
+    clearDraft();
+    setPendingDraft(null);
+    setDraftResolved(true);
+  };
+
   const updateField = <K extends keyof RouteReportInput>(field: K, value: RouteReportInput[K]) => {
     setReport((prev) => ({ ...prev, [field]: value }));
   };
 
-  const updateRefill = <K extends keyof FuelRefillInput>(index: number, field: K, value: FuelRefillInput[K]) => {
+  const updateRefill = <K extends keyof FuelRefillInput>(id: string, field: K, value: FuelRefillInput[K]) => {
     setReport((prev) => ({
       ...prev,
-      fuelRefills: prev.fuelRefills.map((refill, i) => (i === index ? { ...refill, [field]: value } : refill)),
+      fuelRefills: prev.fuelRefills.map((refill) => (refill.id === id ? { ...refill, [field]: value } : refill)),
     }));
   };
 
@@ -57,26 +131,26 @@ export function DriverReportForm() {
     setReport((prev) => ({ ...prev, fuelRefills: [...prev.fuelRefills, emptyRefill()] }));
   };
 
-  const removeRefill = (index: number) => {
-    setReport((prev) => ({ ...prev, fuelRefills: prev.fuelRefills.filter((_, i) => i !== index) }));
+  const removeRefill = (id: string) => {
+    setReport((prev) => ({ ...prev, fuelRefills: prev.fuelRefills.filter((refill) => refill.id !== id) }));
     setPhotoStatus((prev) => {
       const next = { ...prev };
-      delete next[index];
+      delete next[id];
       return next;
     });
   };
 
-  const handlePhotoSelect = async (index: number, event: ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoSelect = async (id: string, event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setPhotoStatus((prev) => ({ ...prev, [index]: "uploading" }));
+    setPhotoStatus((prev) => ({ ...prev, [id]: "uploading" }));
     try {
       const key = await uploadReceiptPhoto(file);
-      updateRefill(index, "receiptPhotoKey", key);
-      setPhotoStatus((prev) => ({ ...prev, [index]: "uploaded" }));
+      updateRefill(id, "receiptPhotoKey", key);
+      setPhotoStatus((prev) => ({ ...prev, [id]: "uploaded" }));
     } catch {
-      setPhotoStatus((prev) => ({ ...prev, [index]: "error" }));
+      setPhotoStatus((prev) => ({ ...prev, [id]: "error" }));
     }
   };
 
@@ -99,11 +173,29 @@ export function DriverReportForm() {
       setStatus("success");
       setReport(emptyReport());
       setPhotoStatus({});
+      clearDraft();
     } catch (err) {
       setStatus("error");
       setErrorMessage(err instanceof ApiError ? err.message : "Не вдалося надіслати звіт. Перевірте з'єднання.");
     }
   };
+
+  if (pendingDraft) {
+    return (
+      <div className="draft-prompt">
+        <h1>Знайдено незавершений звіт</h1>
+        <p>Схоже, ви не встигли надіслати попередній звіт. Відновити його чи почати заново?</p>
+        <div className="draft-prompt-actions">
+          <button type="button" onClick={handleRestoreDraft}>
+            Відновити
+          </button>
+          <button type="button" onClick={handleDiscardDraft}>
+            Почати заново
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form className="report-form" onSubmit={handleSubmit}>
@@ -205,15 +297,15 @@ export function DriverReportForm() {
 
       <fieldset>
         <legend>Заправки</legend>
-        {report.fuelRefills.map((refill, index) => (
-          <div className="refill-row" key={index}>
+        {report.fuelRefills.map((refill) => (
+          <div className="refill-row" key={refill.id}>
             <label>
               Дата і час
               <input
                 type="datetime-local"
                 required
                 value={refill.refillDatetime}
-                onChange={(e) => updateRefill(index, "refillDatetime", e.target.value)}
+                onChange={(e) => updateRefill(refill.id, "refillDatetime", e.target.value)}
               />
             </label>
             <label>
@@ -221,7 +313,7 @@ export function DriverReportForm() {
               <input
                 required
                 value={refill.stationName}
-                onChange={(e) => updateRefill(index, "stationName", e.target.value)}
+                onChange={(e) => updateRefill(refill.id, "stationName", e.target.value)}
               />
             </label>
             <label>
@@ -232,7 +324,7 @@ export function DriverReportForm() {
                 min={0}
                 step="0.1"
                 value={refill.liters}
-                onChange={(e) => updateRefill(index, "liters", e.target.value)}
+                onChange={(e) => updateRefill(refill.id, "liters", e.target.value)}
               />
             </label>
             <label>
@@ -243,7 +335,7 @@ export function DriverReportForm() {
                 min={0}
                 step="0.01"
                 value={refill.totalCost}
-                onChange={(e) => updateRefill(index, "totalCost", e.target.value)}
+                onChange={(e) => updateRefill(refill.id, "totalCost", e.target.value)}
               />
             </label>
             <label>
@@ -252,15 +344,15 @@ export function DriverReportForm() {
                 type="file"
                 accept="image/*"
                 capture="environment"
-                onChange={(e) => handlePhotoSelect(index, e)}
+                onChange={(e) => handlePhotoSelect(refill.id, e)}
               />
             </label>
-            {photoStatus[index] === "uploading" && <p className="photo-status">Завантаження фото...</p>}
-            {photoStatus[index] === "uploaded" && <p className="photo-status photo-status-ok">Фото завантажено.</p>}
-            {photoStatus[index] === "error" && (
+            {photoStatus[refill.id] === "uploading" && <p className="photo-status">Завантаження фото...</p>}
+            {photoStatus[refill.id] === "uploaded" && <p className="photo-status photo-status-ok">Фото завантажено.</p>}
+            {photoStatus[refill.id] === "error" && (
               <p className="photo-status photo-status-error">Не вдалося завантажити фото. Спробуйте ще раз.</p>
             )}
-            <button type="button" onClick={() => removeRefill(index)}>
+            <button type="button" onClick={() => removeRefill(refill.id)}>
               Видалити заправку
             </button>
           </div>

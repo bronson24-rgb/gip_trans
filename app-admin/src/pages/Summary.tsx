@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { Card, CardContent, Typography, TextField, Button, Box, Alert } from "@mui/material";
 import { Title } from "react-admin";
-import { getSessionToken, refreshAccessToken } from "../authProvider";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+import { authenticatedFetch } from "../apiClient";
 
 interface SummaryData {
   date_from: string;
@@ -34,16 +32,7 @@ export function Summary() {
     setLoading(true);
     setError(null);
     try {
-      const url = `${API_BASE_URL}/api/summary?date_from=${dateFrom}&date_to=${dateTo}`;
-      const authHeader = (): Record<string, string> => {
-        const token = getSessionToken();
-        return token ? { Authorization: `Bearer ${token}` } : {};
-      };
-
-      let response = await fetch(url, { headers: authHeader() });
-      if (response.status === 401 && (await refreshAccessToken())) {
-        response = await fetch(url, { headers: authHeader() });
-      }
+      const response = await authenticatedFetch(`/api/summary?date_from=${dateFrom}&date_to=${dateTo}`);
       if (!response.ok) throw new Error(`Помилка ${response.status}`);
       setData(await response.json());
     } catch (err) {

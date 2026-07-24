@@ -143,3 +143,24 @@ button[type="submit"]:disabled {
   font-size: 0.85rem;
   color: #555;
 }
+
+.draft-prompt {
+  max-width: 420px;
+  margin: 3rem auto;
+  padding: 1.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.draft-prompt-actions {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.draft-prompt-actions button {
+  flex: 1;
+}

@@ -1,4 +1,5 @@
 import { clearSession, getAccessToken, refreshAccessToken } from "./auth";
+import { createAuthenticatedFetch } from "./authenticatedFetch";
 import type { RouteReportCreatePayload, RouteReportInput, Vehicle } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
@@ -34,33 +35,18 @@ export class ApiError extends Error {
   }
 }
 
-async function doFetch(path: string, options: RequestInit): Promise<Response> {
-  const token = getAccessToken();
-  return fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  });
-}
-
-async function authenticatedFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  let response = await doFetch(path, options);
-
-  if (response.status === 401) {
-    // Access-токен просрочений — пробуємо оновити його через refresh і повторити запит один раз.
-    const refreshed = await refreshAccessToken();
-    if (refreshed) {
-      response = await doFetch(path, options);
-    }
-  }
-
-  if (response.status === 401) {
-    // Refresh теж не спрацював (відкликаний/протермінований) — сесія дійсно закінчилась.
+const rawAuthenticatedFetch = createAuthenticatedFetch({
+  getAccessToken,
+  refreshAccessToken,
+  onAuthFailure: () => {
+    // Refresh тоже не спрацював — сесія дійсно закінчилась.
     clearSession();
     window.location.reload();
-  }
+  },
+});
+
+async function authenticatedFetch(path: string, options: RequestInit = {}): Promise<Response> {
+  const response = await rawAuthenticatedFetch(API_BASE_URL, path, options);
 
   if (!response.ok) {
     const body = await response.json().catch(() => null);
