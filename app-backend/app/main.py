@@ -1,9 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.auth import router as auth_router
 from app.api.expenses import router as expenses_router
 from app.api.route_reports import router as route_reports_router
 from app.api.summary import router as summary_router
+from app.api.uploads import router as uploads_router
+from app.api.users import router as users_router
+from app.api.vehicles import router as vehicles_router
 from app.core.config import settings
 
 app = FastAPI(title="GIP Trans API")
@@ -15,9 +19,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(route_reports_router)
 app.include_router(expenses_router)
 app.include_router(summary_router)
+app.include_router(uploads_router)
+app.include_router(users_router)
+app.include_router(vehicles_router)
 
 
 @app.get("/health")

@@ -28,11 +28,9 @@ class RouteReport(Base):
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
     )
 
-    # MVP: свободный текст, без справочника машин (согласовано).
-    # TODO(vehicle-registry): при появлении таблицы vehicles — добавить nullable
-    # vehicle_id FK, перенести значения из vehicle_plate, затем сделать vehicle_id
-    # обязательным и вывести vehicle_plate в read-only/legacy.
-    vehicle_plate: Mapped[str] = mapped_column(String(20), nullable=False)
+    vehicle_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("vehicles.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
 
     report_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     route_from: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -70,6 +68,7 @@ class RouteReport(Base):
     )
 
     driver: Mapped["User"] = relationship()
+    vehicle: Mapped["Vehicle"] = relationship()
     fuel_refills: Mapped[list["FuelRefill"]] = relationship(
         back_populates="report", cascade="all, delete-orphan", order_by="FuelRefill.refill_datetime"
     )

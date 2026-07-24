@@ -3,25 +3,27 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.deps import get_current_driver
+from app.api.deps import get_current_user, require_roles
 from app.database import get_db
 from app.models.fuel_refill import FuelRefill
 from app.models.route_report import RouteReport
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.route_report import RouteReportAdminUpdate, RouteReportCreate, RouteReportRead
 
 router = APIRouter(prefix="/api/route-reports", tags=["route-reports"])
+
+manage_reports = require_roles(UserRole.accountant, UserRole.admin)
 
 
 @router.post("", response_model=RouteReportRead, status_code=status.HTTP_201_CREATED)
 def create_route_report(
     payload: RouteReportCreate,
     db: Session = Depends(get_db),
-    driver: User = Depends(get_current_driver),
+    driver: User = Depends(get_current_user),
 ) -> RouteReport:
     report = RouteReport(
         driver_id=driver.id,
-        vehicle_plate=payload.vehicle_plate,
+        vehicle_id=payload.vehicle_id,
         report_date=payload.report_date,
         route_from=payload.route_from,
         route_to=payload.route_to,
@@ -43,33 +45,32 @@ def create_route_report(
 @router.get("", response_model=list[RouteReportRead])
 def list_route_reports(
     db: Session = Depends(get_db),
-    _driver: User = Depends(get_current_driver),
+    user: User = Depends(get_current_user),
 ) -> list[RouteReport]:
-    # Отдаёт все рейсы, не только текущего пользователя — эндпоинт используется
-    # app-admin (PO/бухгалтер должен видеть рейсы всех водителей). Разделения
-    # ролей нет (согласовано), поэтому фильтрации по драйверу здесь больше нет.
-    # У формы водителя своего экрана со списком рейсов пока нет, так что менять
-    # поведение здесь безопасно.
-    return (
-        db.query(RouteReport)
-        .options(selectinload(RouteReport.fuel_refills))
-        .order_by(RouteReport.report_date.desc())
-        .all()
-    )
+    # Бухгалтер/админ видят рейсы всех водителей (нужно для P&L и подтверждения
+    # рейсов); водитель — только свои (иначе видел бы чужие расходы/маршруты).
+    query = db.query(RouteReport).options(selectinload(RouteReport.fuel_refills), selectinload(RouteReport.vehicle))
+    if user.role == UserRole.driver:
+        query = query.filter(RouteReport.driver_id == user.id)
+    return query.order_by(RouteReport.report_date.desc()).all()
 
 
 @router.get("/{report_id}", response_model=RouteReportRead)
 def get_route_report(
     report_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _driver: User = Depends(get_current_driver),
+    user: User = Depends(get_current_user),
 ) -> RouteReport:
-    report = (
+    query = (
         db.query(RouteReport)
-        .options(selectinload(RouteReport.fuel_refills))
+        .options(selectinload(RouteReport.fuel_refills), selectinload(RouteReport.vehicle))
         .filter(RouteReport.id == report_id)
-        .first()
     )
+    if user.role == UserRole.driver:
+        query = query.filter(RouteReport.driver_id == user.id)
+    report = query.first()
+    # 404, а не 403 — чтобы водитель не мог даже узнать по коду ответа, что
+    # чужой рейс с таким id вообще существует.
     if report is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Отчёт не найден")
     return report
@@ -80,10 +81,15 @@ def update_route_report(
     report_id: uuid.UUID,
     payload: RouteReportAdminUpdate,
     db: Session = Depends(get_db),
-    _driver: User = Depends(get_current_driver),
+    _user: User = Depends(manage_reports),
 ) -> RouteReport:
-    """Проставляет ТТН/клиента/выручку и статус — используется app-admin (PO/бухгалтер)."""
-    report = db.query(RouteReport).options(selectinload(RouteReport.fuel_refills)).filter(RouteReport.id == report_id).first()
+    """Проставляет ТТН/клиента/выручку и статус — используется app-admin (бухгалтер/админ)."""
+    report = (
+        db.query(RouteReport)
+        .options(selectinload(RouteReport.fuel_refills), selectinload(RouteReport.vehicle))
+        .filter(RouteReport.id == report_id)
+        .first()
+    )
     if report is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Отчёт не найден")
 

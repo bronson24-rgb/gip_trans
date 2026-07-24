@@ -3,11 +3,11 @@ export interface FuelRefillInput {
   stationName: string;
   liters: string;
   totalCost: string;
-  receiptPhotoUrl?: string;
+  receiptPhotoKey?: string;
 }
 
 export interface RouteReportInput {
-  vehiclePlate: string;
+  vehicleId: string;
   reportDate: string;
   routeFrom: string;
   routeTo: string;
@@ -20,8 +20,16 @@ export interface RouteReportInput {
   fuelRefills: FuelRefillInput[];
 }
 
+export interface Vehicle {
+  id: string;
+  plate_number: string;
+  make: string | null;
+  model: string | null;
+  is_active: boolean;
+}
+
 export interface RouteReportCreatePayload {
-  vehicle_plate: string;
+  vehicle_id: string;
   report_date: string;
   route_from: string;
   route_to: string;
@@ -36,6 +44,6 @@ export interface RouteReportCreatePayload {
     station_name: string;
     liters: number;
     total_cost: number;
-    receipt_photo_url: string | null;
+    receipt_photo_key: string | null;
   }[];
 }

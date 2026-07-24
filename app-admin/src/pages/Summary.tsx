@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Card, CardContent, Typography, TextField, Button, Box, Alert } from "@mui/material";
 import { Title } from "react-admin";
-import { getCurrentUserEmail } from "../authProvider";
+import { getSessionToken, refreshAccessToken } from "../authProvider";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -34,11 +34,16 @@ export function Summary() {
     setLoading(true);
     setError(null);
     try {
-      const email = getCurrentUserEmail();
-      const response = await fetch(
-        `${API_BASE_URL}/api/summary?date_from=${dateFrom}&date_to=${dateTo}`,
-        { headers: email ? { "X-User-Email": email } : {} },
-      );
+      const url = `${API_BASE_URL}/api/summary?date_from=${dateFrom}&date_to=${dateTo}`;
+      const authHeader = (): Record<string, string> => {
+        const token = getSessionToken();
+        return token ? { Authorization: `Bearer ${token}` } : {};
+      };
+
+      let response = await fetch(url, { headers: authHeader() });
+      if (response.status === 401 && (await refreshAccessToken())) {
+        response = await fetch(url, { headers: authHeader() });
+      }
       if (!response.ok) throw new Error(`Помилка ${response.status}`);
       setData(await response.json());
     } catch (err) {

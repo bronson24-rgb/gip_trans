@@ -5,15 +5,20 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_driver
+from app.api.deps import require_roles
 from app.database import get_db
 from app.models.expense import Expense
 from app.models.fuel_refill import FuelRefill
 from app.models.route_report import RouteReport
-from app.models.user import User
+from app.models.user import UserRole
 from app.schemas.summary import SummaryResponse
 
-router = APIRouter(prefix="/api/summary", tags=["summary"])
+# P&L — управленческая отчётность, водителю не нужна и не должна быть видна.
+router = APIRouter(
+    prefix="/api/summary",
+    tags=["summary"],
+    dependencies=[Depends(require_roles(UserRole.accountant, UserRole.admin))],
+)
 
 
 @router.get("", response_model=SummaryResponse)
@@ -21,7 +26,6 @@ def get_summary(
     date_from: date = Query(...),
     date_to: date = Query(...),
     db: Session = Depends(get_db),
-    _user: User = Depends(get_current_driver),
 ) -> SummaryResponse:
     revenue = db.scalar(
         select(func.coalesce(func.sum(RouteReport.revenue_amount), 0)).where(

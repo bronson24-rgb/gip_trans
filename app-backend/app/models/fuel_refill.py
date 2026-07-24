@@ -29,6 +29,9 @@ class FuelRefill(Base):
     total_cost: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
 
     # Опционально (согласовано): форма должна успешно отправляться без фото.
-    receipt_photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Хранится КЛЮЧ объекта в S3 (например "receipts/<uuid>.jpg"), не URL — так
+    # доступ к файлу не завязан на конкретный домен/публичность bucket'а; для
+    # получения используется GET /api/uploads/receipt/{key} (presigned URL).
+    receipt_photo_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     report: Mapped["RouteReport"] = relationship(back_populates="fuel_refills")

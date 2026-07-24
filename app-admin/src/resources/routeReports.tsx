@@ -1,4 +1,5 @@
 import {
+  ArrayField,
   Datagrid,
   DateField,
   Edit,
@@ -10,7 +11,12 @@ import {
   SimpleForm,
   TextField,
   TextInput,
+  useRecordContext,
 } from "react-admin";
+import { Button } from "@mui/material";
+import { getSessionToken, refreshAccessToken } from "../authProvider";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 const STATUS_CHOICES = [
   { id: "draft", name: "Чернетка" },
@@ -19,12 +25,41 @@ const STATUS_CHOICES = [
   { id: "rejected", name: "Відхилено" },
 ];
 
+// Bucket приватний, файл віддається через тимчасове presigned-посилання
+// (GET /api/uploads/receipt/{key}, потребує Bearer-токен — звичайне <a href>
+// його не надішле, тому йдемо через fetch і відкриваємо вже підписане посилання.
+function ReceiptButton() {
+  const refill = useRecordContext<{ receipt_photo_key?: string | null }>();
+  if (!refill?.receipt_photo_key) return <span>—</span>;
+
+  const handleClick = async () => {
+    const authHeader = (): Record<string, string> => {
+      const token = getSessionToken();
+      return token ? { Authorization: `Bearer ${token}` } : {};
+    };
+    const url = `${API_BASE_URL}/api/uploads/receipt/${refill.receipt_photo_key}`;
+
+    let response = await fetch(url, { headers: authHeader() });
+    if (response.status === 401 && (await refreshAccessToken())) {
+      response = await fetch(url, { headers: authHeader() });
+    }
+    if (!response.ok) return;
+    window.open(response.url, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <Button size="small" onClick={handleClick}>
+      Переглянути чек
+    </Button>
+  );
+}
+
 export function RouteReportList() {
   return (
     <List sort={{ field: "report_date", order: "DESC" }}>
       <Datagrid rowClick="edit">
         <DateField source="report_date" label="Дата" />
-        <TextField source="vehicle_plate" label="Держ.номер" />
+        <TextField source="vehicle.plate_number" label="Держ.номер" />
         <TextField source="route_from" label="Звідки" />
         <TextField source="route_to" label="Куди" />
         <NumberField source="mileage" label="Пробіг, км" />
@@ -43,10 +78,20 @@ export function RouteReportEdit() {
       <SimpleForm>
         {/* Данные рейса — вводит водитель, здесь только для справки */}
         <TextField source="report_date" label="Дата" />
-        <TextField source="vehicle_plate" label="Держ.номер" />
+        <TextField source="vehicle.plate_number" label="Держ.номер" />
         <TextField source="route_from" label="Звідки" />
         <TextField source="route_to" label="Куди" />
         <NumberField source="mileage" label="Пробіг, км" />
+
+        <ArrayField source="fuel_refills" label="Заправки">
+          <Datagrid bulkActionButtons={false}>
+            <DateField source="refill_datetime" label="Дата і час" showTime />
+            <TextField source="station_name" label="АЗС" />
+            <NumberField source="liters" label="Літри" />
+            <NumberField source="total_cost" label="Сума" />
+            <ReceiptButton />
+          </Datagrid>
+        </ArrayField>
 
         {/* Поля, которые проставляет PO/бухгалтер */}
         <TextInput source="waybill_number" label="Номер ТТН" />

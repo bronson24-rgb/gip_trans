@@ -5,6 +5,7 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.route_report import ReportStatus
+from app.schemas.vehicle import VehicleRead
 
 
 class FuelRefillCreate(BaseModel):
@@ -12,7 +13,7 @@ class FuelRefillCreate(BaseModel):
     station_name: str = Field(min_length=1, max_length=255)
     liters: Decimal = Field(gt=0)
     total_cost: Decimal = Field(gt=0)
-    receipt_photo_url: str | None = None
+    receipt_photo_key: str | None = None
 
 
 class FuelRefillRead(FuelRefillCreate):
@@ -21,7 +22,7 @@ class FuelRefillRead(FuelRefillCreate):
 
 
 class RouteReportCreate(BaseModel):
-    vehicle_plate: str = Field(min_length=1, max_length=20)
+    vehicle_id: uuid.UUID
     report_date: date
     route_from: str = Field(min_length=1, max_length=255)
     route_to: str = Field(min_length=1, max_length=255)
@@ -45,7 +46,8 @@ class RouteReportRead(BaseModel):
 
     id: uuid.UUID
     driver_id: uuid.UUID
-    vehicle_plate: str
+    vehicle_id: uuid.UUID
+    vehicle: VehicleRead
     report_date: date
     route_from: str
     route_to: str

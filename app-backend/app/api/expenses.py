@@ -3,20 +3,25 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_driver
+from app.api.deps import get_current_user, require_roles
 from app.database import get_db
 from app.models.expense import Expense
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.expense import ExpenseCreate, ExpenseRead, ExpenseUpdate
 
-router = APIRouter(prefix="/api/expenses", tags=["expenses"])
+# Общие расходы компании — исключительно бэк-офис, водителю тут делать нечего.
+router = APIRouter(
+    prefix="/api/expenses",
+    tags=["expenses"],
+    dependencies=[Depends(require_roles(UserRole.accountant, UserRole.admin))],
+)
 
 
 @router.post("", response_model=ExpenseRead, status_code=status.HTTP_201_CREATED)
 def create_expense(
     payload: ExpenseCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_driver),
+    user: User = Depends(get_current_user),
 ) -> Expense:
     expense = Expense(**payload.model_dump(), created_by=user.id)
     db.add(expense)
@@ -28,7 +33,6 @@ def create_expense(
 @router.get("", response_model=list[ExpenseRead])
 def list_expenses(
     db: Session = Depends(get_db),
-    _user: User = Depends(get_current_driver),
 ) -> list[Expense]:
     return db.query(Expense).order_by(Expense.expense_date.desc()).all()
 
@@ -37,7 +41,6 @@ def list_expenses(
 def get_expense(
     expense_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _user: User = Depends(get_current_driver),
 ) -> Expense:
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if expense is None:
@@ -50,7 +53,6 @@ def update_expense(
     expense_id: uuid.UUID,
     payload: ExpenseUpdate,
     db: Session = Depends(get_db),
-    _user: User = Depends(get_current_driver),
 ) -> Expense:
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if expense is None:
@@ -68,7 +70,6 @@ def update_expense(
 def delete_expense(
     expense_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _user: User = Depends(get_current_driver),
 ) -> None:
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if expense is None:
