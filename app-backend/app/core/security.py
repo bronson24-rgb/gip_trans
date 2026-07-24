@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -6,6 +7,8 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 
 from app.core.config import settings
+
+logger = logging.getLogger("app.auth")
 
 JWT_ALGORITHM = "HS256"
 
@@ -28,10 +31,12 @@ def verify_google_id_token(token: str) -> str:
             token, google_requests.Request(), settings.google_oauth_client_id
         )
     except Exception as exc:  # noqa: BLE001 — библиотека кидает разные типы на разные проблемы
+        logger.warning("Проверка Google id_token не прошла: %s: %s", type(exc).__name__, exc)
         raise InvalidGoogleTokenError(str(exc)) from exc
 
     email = payload.get("email")
     if not email or not payload.get("email_verified"):
+        logger.warning("Google id_token без email или без email_verified")
         raise InvalidGoogleTokenError("email отсутствует або не підтверджений Google")
 
     return email

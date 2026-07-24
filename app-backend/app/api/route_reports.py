@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models.fuel_refill import FuelRefill
 from app.models.route_report import RouteReport
 from app.models.user import User, UserRole
+from app.models.vehicle import Vehicle
 from app.schemas.route_report import RouteReportAdminUpdate, RouteReportCreate, RouteReportRead
 
 router = APIRouter(prefix="/api/route-reports", tags=["route-reports"])
@@ -21,6 +22,9 @@ def create_route_report(
     db: Session = Depends(get_db),
     driver: User = Depends(get_current_user),
 ) -> RouteReport:
+    if db.get(Vehicle, payload.vehicle_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Автомобіль не знайдено")
+
     report = RouteReport(
         driver_id=driver.id,
         vehicle_id=payload.vehicle_id,

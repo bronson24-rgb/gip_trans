@@ -1,10 +1,12 @@
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.limiter import limiter
 from app.core.security import (
     InvalidGoogleTokenError,
     InvalidTokenError,
@@ -23,6 +25,8 @@ from app.schemas.auth import (
     RefreshRequest,
     TokenPairResponse,
 )
+
+logger = logging.getLogger("app.auth")
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -43,7 +47,9 @@ def _issue_token_pair(db: Session, user: User) -> tuple[str, str]:
 
 
 @router.post("/google", response_model=TokenPairResponse)
+@limiter.limit(lambda: settings.rate_limit_auth)
 def login_with_google(
+    request: Request,
     payload: GoogleLoginRequest,
     db: Session = Depends(get_db),
 ) -> TokenPairResponse:
@@ -54,12 +60,15 @@ def login_with_google(
 
     user = db.query(User).filter(User.email == email).first()
     if user is None:
+        logger.warning("Попытка входа с непригашённым email: %s", email)
         # Самостоятельная регистрация не предусмотрена — доступ даёт только
         # запись в allow-list, которую создаёт PO/бухгалтер через app-admin.
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Этот email не приглашён в систему")
     if not user.is_allowed:
+        logger.warning("Попытка входа заблокированного пользователя: %s", email)
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Доступ запрещён (нет в allow-list)")
 
+    logger.info("Успешный вход: %s (роль %s)", user.email, user.role.value)
     access_token, refresh_token = _issue_token_pair(db, user)
     return TokenPairResponse(
         access_token=access_token, refresh_token=refresh_token, email=user.email, full_name=user.full_name
@@ -67,23 +76,31 @@ def login_with_google(
 
 
 @router.post("/refresh", response_model=AccessTokenResponse)
+@limiter.limit(lambda: settings.rate_limit_auth)
 def refresh_access_token(
+    request: Request,
     payload: RefreshRequest,
     db: Session = Depends(get_db),
 ) -> AccessTokenResponse:
     try:
         user_id, jti = decode_refresh_token(payload.refresh_token)
     except InvalidTokenError:
+        logger.warning("Refresh с недействительным токеном")
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Недействительный refresh-токен")
 
     token_row = db.get(RefreshToken, jti)
     if token_row is None or token_row.user_id != user_id:
+        logger.warning("Refresh с токеном без соответствующей записи в БД (user_id=%s)", user_id)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Недействительный refresh-токен")
 
     if token_row.revoked_at is not None:
         # Уже использованный (отозванный) refresh-токен предъявлен повторно —
         # похоже на кражу токена. Отзываем ВСЕ refresh-токены пользователя,
         # заставляя перелогиниться на всех устройствах.
+        logger.warning(
+            "Обнаружено повторное использование отозванного refresh-токена, user_id=%s — отзываю все токены",
+            user_id,
+        )
         db.query(RefreshToken).filter(
             RefreshToken.user_id == user_id, RefreshToken.revoked_at.is_(None)
         ).update({"revoked_at": datetime.now(timezone.utc)})
@@ -95,6 +112,7 @@ def refresh_access_token(
 
     user = db.get(User, user_id)
     if user is None or not user.is_allowed:
+        logger.warning("Refresh для заблокированного/несуществующего пользователя user_id=%s", user_id)
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Доступ заборонено")
 
     # Ротация: старый refresh-токен помечаем использованным, выдаём новую пару.
@@ -106,7 +124,9 @@ def refresh_access_token(
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(lambda: settings.rate_limit_auth)
 def logout(
+    request: Request,
     payload: LogoutRequest,
     db: Session = Depends(get_db),
 ) -> None:

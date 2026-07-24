@@ -6,6 +6,13 @@ from decimal import Decimal
 os.environ.setdefault(
     "DATABASE_URL", "postgresql+psycopg://gip:change-me@localhost:5432/gip_trans_test"
 )
+# Дефолтные лимиты (10/20 в минуту) рассчитаны на реальный трафик, а не на то, что
+# тесты сами дергают эти эндпоинты десятки раз за один прогон. Здесь — заведомо
+# большой потолок, чтобы rate limiting не влиял на остальные тесты; сам rate
+# limiting отдельно и целенаправленно проверяется в test_rate_limiting.py
+# (через monkeypatch конкретных, маленьких значений на время одного теста).
+os.environ.setdefault("RATE_LIMIT_AUTH", "10000/minute")
+os.environ.setdefault("RATE_LIMIT_UPLOADS", "10000/minute")
 
 import pytest
 from fastapi.testclient import TestClient

@@ -16,6 +16,15 @@ def test_create_route_report_success(client, auth_headers, valid_route_report_pa
     assert body["vehicle"]["plate_number"] == "A123BC77"
 
 
+def test_create_route_report_with_unknown_vehicle_returns_404_not_500(client, auth_headers, valid_route_report_payload):
+    headers, _user = auth_headers
+    valid_route_report_payload["vehicle_id"] = "00000000-0000-0000-0000-000000000000"
+
+    response = client.post("/api/route-reports", json=valid_route_report_payload, headers=headers)
+
+    assert response.status_code == 404
+
+
 def test_create_route_report_rejects_odometer_end_before_start(client, auth_headers, valid_route_report_payload):
     headers, _user = auth_headers
     valid_route_report_payload["odometer_end"] = valid_route_report_payload["odometer_start"] - 1
