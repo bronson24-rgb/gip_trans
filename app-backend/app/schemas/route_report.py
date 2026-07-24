@@ -56,6 +56,18 @@ class RouteReportRead(BaseModel):
     departure_time: time
     arrival_time: time
     comment: str | None
+    waybill_number: str | None
+    client_name: str | None
+    revenue_amount: Decimal | None
     status: ReportStatus
     created_at: datetime
     fuel_refills: list[FuelRefillRead] = []
+
+
+class RouteReportAdminUpdate(BaseModel):
+    """Поля, которые проставляет PO/бухгалтер через app-admin — не водитель."""
+
+    waybill_number: str | None = Field(default=None, max_length=50)
+    client_name: str | None = Field(default=None, max_length=255)
+    revenue_amount: Decimal | None = Field(default=None, ge=0)
+    status: ReportStatus | None = None

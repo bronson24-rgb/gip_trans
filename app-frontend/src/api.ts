@@ -48,7 +48,7 @@ export async function createRouteReport(input: RouteReportInput, driverEmail: st
 
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new ApiError(body?.detail ? JSON.stringify(body.detail) : `Ошибка ${response.status}`, response.status);
+    throw new ApiError(body?.detail ? JSON.stringify(body.detail) : `Помилка ${response.status}`, response.status);
   }
 
   return response.json();

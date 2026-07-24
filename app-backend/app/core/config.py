@@ -6,7 +6,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://gip:gip@localhost:5432/gip_trans"
     environment: str = "development"
-    cors_allow_origins: list[str] = ["http://localhost:5173"]
+    cors_allow_origins: list[str] = ["http://localhost:5173", "http://localhost:5174"]
 
 
 settings = Settings()

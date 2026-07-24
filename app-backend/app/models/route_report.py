@@ -51,6 +51,13 @@ class RouteReport(Base):
 
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Заполняются не водителем, а PO/бухгалтером через app-admin — после того как
+    # рейс отправлен. MVP: client_name текстом, без справочника клиентов (тот же
+    # паттерн, что и vehicle_plate).
+    waybill_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    client_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    revenue_amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+
     status: Mapped[ReportStatus] = mapped_column(
         SAEnum(ReportStatus, name="report_status"),
         default=ReportStatus.submitted,

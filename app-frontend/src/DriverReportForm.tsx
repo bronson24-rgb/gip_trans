@@ -72,18 +72,18 @@ export function DriverReportForm() {
       setReport(emptyReport());
     } catch (err) {
       setStatus("error");
-      setErrorMessage(err instanceof ApiError ? err.message : "Не удалось отправить отчёт. Проверьте связь.");
+      setErrorMessage(err instanceof ApiError ? err.message : "Не вдалося надіслати звіт. Перевірте з'єднання.");
     }
   };
 
   return (
     <form className="report-form" onSubmit={handleSubmit}>
-      <h1>Отчёт по маршруту</h1>
+      <h1>Звіт по маршруту</h1>
 
       <fieldset>
-        <legend>Вход (временно, до Google OAuth)</legend>
+        <legend>Вхід (тимчасово, до Google OAuth)</legend>
         <label>
-          Email водителя
+          Email водія
           <input
             type="email"
             required
@@ -96,7 +96,7 @@ export function DriverReportForm() {
       <fieldset>
         <legend>Рейс</legend>
         <label>
-          Гос.номер автомобиля
+          Держ.номер автомобіля
           <input
             required
             value={report.vehiclePlate}
@@ -113,15 +113,15 @@ export function DriverReportForm() {
           />
         </label>
         <label>
-          Откуда
+          Звідки
           <input required value={report.routeFrom} onChange={(e) => updateField("routeFrom", e.target.value)} />
         </label>
         <label>
-          Куда
+          Куди
           <input required value={report.routeTo} onChange={(e) => updateField("routeTo", e.target.value)} />
         </label>
         <label>
-          Время выезда
+          Час виїзду
           <input
             type="time"
             required
@@ -130,7 +130,7 @@ export function DriverReportForm() {
           />
         </label>
         <label>
-          Время прибытия
+          Час прибуття
           <input
             type="time"
             required
@@ -141,9 +141,9 @@ export function DriverReportForm() {
       </fieldset>
 
       <fieldset>
-        <legend>Пробег и топливо</legend>
+        <legend>Пробіг і пальне</legend>
         <label>
-          Одометр на начало (км)
+          Одометр на початок (км)
           <input
             type="number"
             required
@@ -153,7 +153,7 @@ export function DriverReportForm() {
           />
         </label>
         <label>
-          Одометр на конец (км)
+          Одометр на кінець (км)
           <input
             type="number"
             required
@@ -162,9 +162,9 @@ export function DriverReportForm() {
             onChange={(e) => updateField("odometerEnd", e.target.value)}
           />
         </label>
-        {odometerInvalid && <p className="field-error">Одометр на конец не может быть меньше одометра на начало</p>}
+        {odometerInvalid && <p className="field-error">Одометр на кінець не може бути меншим за одометр на початок</p>}
         <label>
-          Остаток топлива на конец (л)
+          Залишок пального на кінець (л)
           <input
             type="number"
             required
@@ -181,7 +181,7 @@ export function DriverReportForm() {
         {report.fuelRefills.map((refill, index) => (
           <div className="refill-row" key={index}>
             <label>
-              Дата и время
+              Дата і час
               <input
                 type="datetime-local"
                 required
@@ -198,7 +198,7 @@ export function DriverReportForm() {
               />
             </label>
             <label>
-              Литры
+              Літри
               <input
                 type="number"
                 required
@@ -209,7 +209,7 @@ export function DriverReportForm() {
               />
             </label>
             <label>
-              Сумма (₽)
+              Сума (₽)
               <input
                 type="number"
                 required
@@ -220,34 +220,34 @@ export function DriverReportForm() {
               />
             </label>
             <label>
-              Фото чека (необязательно)
+              Фото чека (необов'язково)
               {/* TODO(storage): реальная загрузка в S3 — отдельная задача.
                   Пока поле только для выбора файла на клиенте, на backend не отправляется. */}
               <input type="file" accept="image/*" capture="environment" />
             </label>
             <button type="button" onClick={() => removeRefill(index)}>
-              Удалить заправку
+              Видалити заправку
             </button>
           </div>
         ))}
         <button type="button" onClick={addRefill}>
-          + Добавить заправку
+          + Додати заправку
         </button>
       </fieldset>
 
       <fieldset>
-        <legend>Комментарий</legend>
+        <legend>Коментар</legend>
         <label>
-          Комментарий (необязательно)
+          Коментар (необов'язково)
           <textarea value={report.comment} onChange={(e) => updateField("comment", e.target.value)} />
         </label>
       </fieldset>
 
       <button type="submit" disabled={status === "submitting"}>
-        {status === "submitting" ? "Отправка..." : "Отправить отчёт"}
+        {status === "submitting" ? "Надсилання..." : "Надіслати звіт"}
       </button>
 
-      {status === "success" && <p className="status-success">Отчёт отправлен.</p>}
+      {status === "success" && <p className="status-success">Звіт надіслано.</p>}
       {status === "error" && <p className="status-error">{errorMessage}</p>}
     </form>
   );
