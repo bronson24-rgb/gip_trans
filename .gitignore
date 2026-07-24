@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Node
+node_modules/
+dist/
+
+# Env files with real secrets
+infra/.env
+app-backend/.env
+app-frontend/.env
+
+# OS
+.DS_Store
+
+# Claude Code — локальные, персональные настройки разрешений
+.claude/settings.local.json
