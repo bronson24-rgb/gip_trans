@@ -1,5 +1,9 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Вынесено в константу: используется и как дефолт поля, и для проверки
+# "секрет не сменили перед продом" в assert_safe_for_production().
+DEFAULT_INSECURE_JWT_SECRET = "dev-insecure-secret-change-me"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -13,6 +17,8 @@ class Settings(BaseSettings):
         "http://localhost:8081",
     ]
 
+    log_level: str = "INFO"
+
     # Google OAuth — см. docs/admin-guide.md за инструкцией по созданию Client ID.
     google_oauth_client_id: str = ""
 
@@ -20,7 +26,7 @@ class Settings(BaseSettings):
     # Access — короткоживущий, летит в каждом запросе к API. Refresh — долгоживущий,
     # используется только для получения нового access (и ротируется при каждом
     # использовании — см. app/api/auth.py и модель RefreshToken).
-    jwt_secret: str = "dev-insecure-secret-change-me"
+    jwt_secret: str = DEFAULT_INSECURE_JWT_SECRET
     jwt_access_expire_minutes: int = 15
     jwt_refresh_expire_days: int = 30
 
@@ -36,5 +42,21 @@ class Settings(BaseSettings):
     s3_secret_key: str = "minioadmin"
     s3_region: str = "us-east-1"
 
+    # Rate limiting (slowapi, формат строки — см. https://limits.readthedocs.io).
+    # По IP клиента. In-memory хранилище — верно для одного инстанса backend
+    # (текущая архитектура); при горизонтальном масштабировании потребует Redis.
+    rate_limit_auth: str = "10/minute"
+    rate_limit_uploads: str = "20/minute"
+
 
 settings = Settings()
+
+
+def assert_safe_for_production(settings: Settings) -> None:
+    """Не даёт процессу стартовать в проде с секретом из репозитория."""
+    if settings.environment == "production" and settings.jwt_secret == DEFAULT_INSECURE_JWT_SECRET:
+        raise RuntimeError(
+            "JWT_SECRET равен небезопасному значению по умолчанию, а ENVIRONMENT=production. "
+            "Сгенерируйте случайный секрет (например: openssl rand -hex 32) и задайте его "
+            "в JWT_SECRET в .env перед запуском в production."
+        )
