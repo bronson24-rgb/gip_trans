@@ -13,6 +13,9 @@ app-backend/.env
 app-frontend/.env
 app-admin/.env
 
+# Secrets
+secrets/
+
 # OS
 .DS_Store
 
